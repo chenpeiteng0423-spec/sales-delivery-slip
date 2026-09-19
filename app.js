@@ -15,6 +15,7 @@ const paperColors = {
   white: { body: "#fcfcf7", edge: "#f4f6f2", ring: "#d5dfe2" },
   blue: { body: "#eaf4fa", edge: "#e1eef6", ring: "#c7dce9", xlsx: "FFEAF4FA" },
   red: { body: "#fff0f1", edge: "#fae6e9", ring: "#e9ced3", xlsx: "FFFFF0F1" },
+  yellow: { body: "#fff7df", edge: "#f8edcc", ring: "#e7dcc0", xlsx: "FFFFF7DF" },
 };
 qr.alipay.src = "./assets/alipay.png";
 qr.wechat.src = "./assets/wechat.png";
@@ -369,7 +370,7 @@ Promise.all([qr.alipay.decode(), qr.wechat.decode()]).then(() => {
       company: { type: "string" }, companyAddress: { type: "string" }, landline: { type: "string" }, mobile: { type: "string" }, qq: { type: "string" },
       formTitle: { type: "string" }, recipient: { type: "string" }, shippingAddress: { type: "string" }, contact: { type: "string" }, phone: { type: "string" },
       date: { type: "string" }, number: { type: "string" }, terms: { type: "string" }, issuedBy: { type: "string" }, receivedBy: { type: "string" }, slogan: { type: "string" },
-      paperTone: { type: "string", enum: ["white", "blue", "red"] },
+      paperTone: { type: "string", enum: ["white", "blue", "red", "yellow"] },
       items: { type: "array", minItems: 1, maxItems: 6, items: { type: "object", properties: Object.fromEntries(itemFields.map(key => [key, { type: "string" }])), required: ["model", "qty", "price"], additionalProperties: false } }
     }, required: ["formTitle", "recipient", "date", "number", "items"], additionalProperties: false };
     Promise.resolve(document.modelContext.registerTool({ name: "fill_save_delivery_slip", title: "填写并保存销售送货单", description: "将指定信息填入当前销售送货单并保存，显示最终预览和下载按钮。", inputSchema: schema, annotations: { readOnlyHint: false, untrustedContentHint: false }, execute(input) {

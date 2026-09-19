@@ -14,3 +14,5 @@
 @media(max-width:410px){.field-grid.two.company-grid{grid-template-columns:1fr}.company-grid .field:last-child{grid-column:auto}}
 @media(min-width:360px) and (max-width:410px){.field-grid.two.company-grid,.field-grid.two.receiver-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.company-grid .field:last-child,.receiver-grid .field.wide{grid-column:1/-1}}
 .paper-choice__options{flex-wrap:wrap}.paper-swatch--red{background:#fff0f1}
+.paper-choice__options{gap:4px}.paper-choice__options label{gap:4px;padding-inline:6px}.paper-swatch--yellow{background:#fff7df}
+@media(max-width:650px){.paper-choice__options label{gap:3px;padding-inline:4px}.paper-choice__options input,.paper-swatch{width:12px;height:12px}}
