@@ -13,3 +13,4 @@
 @media(max-width:650px){.site-header__inner{padding:13px 15px}.workspace{padding:14px;gap:14px}.form-section{padding:14px 15px}.field-grid.two.company-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.company-grid .field:last-child{grid-column:1/-1}.document-settings{grid-template-columns:1fr;gap:9px}.item-grid .field input{min-height:40px}}
 @media(max-width:410px){.field-grid.two.company-grid{grid-template-columns:1fr}.company-grid .field:last-child{grid-column:auto}}
 @media(min-width:360px) and (max-width:410px){.field-grid.two.company-grid,.field-grid.two.receiver-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.company-grid .field:last-child,.receiver-grid .field.wide{grid-column:1/-1}}
+.paper-choice__options{flex-wrap:wrap}.paper-swatch--red{background:#fff0f1}
