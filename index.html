@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="description" content="销售送货单填写和文件下载工具">
+  <title>销售送货单制作</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="./style.css">
+  <script defer src="./vendor/jszip.min.js"></script>
+  <script defer src="./vendor/pdf-lib.min.js"></script>
+  <script defer src="./app.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <div class="brand-mark" aria-hidden="true">单</div>
+      <div><p class="eyebrow">单据制作工具</p><h1>销售送货单制作</h1></div>
+      <span class="privacy-note">填写内容仅保存在本机浏览器</span>
+    </div>
+  </header>
+
+  <main id="workspace" class="workspace">
+    <section class="editor" aria-labelledby="editorTitle">
+      <div class="intro">
+        <div><p class="eyebrow">填写单据</p><h2 id="editorTitle">填写后预览并下载</h2></div>
+        <p>金额自动计算。点击“保存并查看”后，可下载 PDF、Word 或 Excel。</p>
+      </div>
+
+      <form id="receiptForm" novalidate>
+        <section class="form-section" aria-labelledby="companyTitle">
+          <div class="section-heading"><span>01</span><h3 id="companyTitle">公司抬头</h3></div>
+          <div class="field-grid two">
+            <label class="field wide">公司名称<input name="company" maxlength="36" autocomplete="organization"></label>
+            <label class="field wide">公司地址<input name="companyAddress" maxlength="60" autocomplete="street-address"></label>
+            <label class="field">公司电话<input name="landline" maxlength="24" inputmode="tel"></label>
+            <label class="field">手机<input name="mobile" maxlength="24" inputmode="tel"></label>
+            <label class="field wide">QQ / 其他联系方式<input name="qq" maxlength="36"></label>
+          </div>
+        </section>
+
+        <section class="form-section" aria-labelledby="documentTitle">
+          <div class="section-heading"><span>02</span><h3 id="documentTitle">单据标题</h3></div>
+          <div class="field-grid"><label class="field">标题<input name="formTitle" maxlength="20" value="销售送货单" required></label></div>
+        </section>
+
+        <section class="form-section" aria-labelledby="receiverTitle">
+          <div class="section-heading"><span>03</span><h3 id="receiverTitle">收货信息</h3></div>
+          <div class="field-grid two">
+            <label class="field wide">收货单位 <em>必填</em><input name="recipient" required maxlength="40"></label>
+            <label class="field wide">收货地址<input name="shippingAddress" maxlength="70"></label>
+            <label class="field">联系人<input name="contact" maxlength="24"></label>
+            <label class="field">联系电话<input name="phone" maxlength="24" inputmode="tel"></label>
+            <label class="field">日期 <em>必填</em><input name="date" type="date" required></label>
+            <label class="field">单号 <em>必填</em><input name="number" required maxlength="32"></label>
+          </div>
+        </section>
+
+        <section class="form-section" aria-labelledby="itemsTitle">
+          <div class="section-heading"><span>04</span><h3 id="itemsTitle">商品明细</h3></div>
+          <div id="itemsEditor" class="items-editor"></div>
+          <div class="items-footer"><button class="text-button" id="addItem" type="button">＋ 添加一行</button><p>最多 6 行，金额按数量 × 单价计算</p></div>
+          <div class="amount-strip"><span>合计金额</span><strong id="totalDisplay">¥0.00</strong></div>
+        </section>
+
+        <section class="form-section" aria-labelledby="footerTitle">
+          <div class="section-heading"><span>05</span><h3 id="footerTitle">页脚与签收</h3></div>
+          <div class="field-grid two">
+            <label class="field wide">收货提示语<textarea name="terms" rows="2" maxlength="100"></textarea></label>
+            <label class="field">销售单位及经手人<input name="issuedBy" maxlength="32"></label>
+            <label class="field">收货单位及经手人<input name="receivedBy" maxlength="32"></label>
+            <label class="field wide">底部宣传语（自动重复四次）<input name="slogan" maxlength="35"></label>
+          </div>
+        </section>
+
+        <div class="save-area">
+          <button class="primary-button" type="submit">保存并查看</button>
+          <button class="quiet-button" id="newReceipt" type="button">新建空白单</button>
+          <p id="status" role="status" aria-live="polite">尚未保存</p>
+        </div>
+      </form>
+
+    </section>
+
+    <aside class="preview-panel" aria-labelledby="previewTitle">
+      <div class="preview-heading"><div><p class="eyebrow">实时预览</p><h2 id="previewTitle">销售送货单</h2></div><span>连续纸样式</span></div>
+      <div class="paper-scroller"><canvas id="receiptPreview" width="1760" height="1000" role="img" aria-label="当前销售送货单预览，包含两侧小孔和右上角两个收款二维码"></canvas></div>
+      <p class="preview-caption">收款码来自您提供的图片。付款前请核对收款人信息。</p>
+    </aside>
+  </main>
+  <section id="savedView" class="saved-view" aria-labelledby="savedTitle" hidden>
+    <div class="saved-top"><div><p class="eyebrow">已保存</p><h2 id="savedTitle">销售送货单</h2><p>请核对下方单据，然后选择格式下载。</p></div><button id="backToEdit" type="button" class="quiet-button">返回修改</button></div>
+    <div class="saved-paper"><canvas id="savedPreview" width="1760" height="1000" role="img" aria-label="已保存的销售送货单"></canvas></div>
+    <section id="downloadBar" class="download-bar" aria-labelledby="downloadTitle">
+      <div><p class="eyebrow">文件已就绪</p><h3 id="downloadTitle">下载到电脑</h3></div>
+      <div class="download-actions"><button type="button" data-format="pdf">下载 PDF</button><button type="button" data-format="docx">下载 Word</button><button type="button" data-format="xlsx">下载 Excel</button></div>
+    </section>
+    <p id="savedStatus" role="status" aria-live="polite"></p>
+  </section>
+</body>
+</html>
