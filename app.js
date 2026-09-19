@@ -91,6 +91,7 @@ function renumber() {
 function collect() {
   const data = {};
   for (const key of fields) data[key] = clean(form.elements.namedItem(key).value);
+  data.paperTone = form.elements.namedItem("paperTone").value;
   data.items = [...editor.children].map(row => Object.fromEntries(itemFields.map(key => [key, clean(row.querySelector(`[data-item="${key}"]`).value)])));
   return data;
 }
@@ -126,6 +127,7 @@ function validate(data) {
 }
 function applyData(data) {
   for (const key of fields) form.elements.namedItem(key).value = data[key] || (key === "formTitle" ? "销售送货单" : "");
+  form.elements.namedItem("paperTone").value = data.paperTone === "blue" ? "blue" : "white";
   editor.replaceChildren();
   for (const item of data.items?.length ? data.items.slice(0, 6) : [blankItem()]) addItem(item);
   updateAmounts(); renderPreview();
@@ -135,7 +137,8 @@ function drawReceipt(canvas, data) {
   const scale = canvas.width / 1760, ctx = canvas.getContext("2d");
   ctx.setTransform(scale, 0, 0, scale, 0, 0);
   const blue = "#6387a5", dark = "#4d7391", line = "#8faec4";
-  ctx.fillStyle = "#fcfcf7"; ctx.fillRect(0, 0, 1760, 1000);
+  const bluePaper = data.paperTone === "blue";
+  ctx.fillStyle = bluePaper ? "#eaf4fa" : "#fcfcf7"; ctx.fillRect(0, 0, 1760, 1000);
   function text(value, x, y, size = 21, bold = false, align = "left", maxWidth) {
     ctx.fillStyle = dark; ctx.font = `${bold ? "700" : "400"} ${size}px "Songti SC", "SimSun", serif`;
     ctx.textAlign = align; ctx.textBaseline = "middle";
@@ -154,12 +157,12 @@ function drawReceipt(canvas, data) {
     text(value, x, y, 12, false, "left", width);
   }
   // Continuous-feed paper edges, tear lines, and tractor holes.
-  for (const x of [0, 1670]) { ctx.fillStyle = "#f4f6f2"; ctx.fillRect(x, 0, 90, 1000); }
+  for (const x of [0, 1670]) { ctx.fillStyle = bluePaper ? "#e1eef6" : "#f4f6f2"; ctx.fillRect(x, 0, 90, 1000); }
   ctx.save(); ctx.strokeStyle = blue; ctx.lineWidth = 2; ctx.setLineDash([10, 9]);
   for (const x of [94, 1666]) { ctx.beginPath(); ctx.moveTo(x, 15); ctx.lineTo(x, 986); ctx.stroke(); }
   ctx.restore();
   for (let y = 52; y <= 968; y += 92) for (const x of [45, 1715]) {
-    ctx.fillStyle = "#d5dfe2"; ctx.beginPath(); ctx.arc(x, y, 16, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = bluePaper ? "#c7dce9" : "#d5dfe2"; ctx.beginPath(); ctx.arc(x, y, 16, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = "#36515d"; ctx.beginPath(); ctx.arc(x, y, 12, 0, Math.PI * 2); ctx.fill();
   }
   // Header and the two exact payment codes supplied by the owner.
@@ -246,6 +249,32 @@ function setCell(doc, address, value, type = "text", formula = false) {
     t.textContent = clean(value); is.append(t); cell.append(is);
   }
 }
+async function colorXlsxPaper(zip, sheet) {
+  const styles = new DOMParser().parseFromString(await zip.file("xl/styles.xml").async("string"), "application/xml");
+  if (styles.querySelector("parsererror")) throw new Error("Excel 样式无法读取");
+  const fills = styles.getElementsByTagNameNS(XML_NS, "fills")[0];
+  const xfs = styles.getElementsByTagNameNS(XML_NS, "cellXfs")[0];
+  const fill = styles.createElementNS(XML_NS, "fill");
+  const pattern = styles.createElementNS(XML_NS, "patternFill");
+  const color = styles.createElementNS(XML_NS, "fgColor");
+  color.setAttribute("rgb", "FFEAF4FA");
+  pattern.setAttribute("patternType", "solid"); pattern.append(color); fill.append(pattern);
+  const fillId = fills.children.length; fills.append(fill); fills.setAttribute("count", fills.children.length);
+  const styleMap = new Map();
+  for (const cell of sheet.getElementsByTagNameNS(XML_NS, "c")) {
+    const oldId = Number(cell.getAttribute("s") || 0);
+    if (!styleMap.has(oldId)) {
+      const original = xfs.children[oldId];
+      if (!original) throw new Error("Excel 单元格样式缺失");
+      const clone = original.cloneNode(true);
+      clone.setAttribute("fillId", fillId); clone.setAttribute("applyFill", "1");
+      styleMap.set(oldId, xfs.children.length); xfs.append(clone);
+    }
+    cell.setAttribute("s", styleMap.get(oldId));
+  }
+  xfs.setAttribute("count", xfs.children.length);
+  zip.file("xl/styles.xml", new XMLSerializer().serializeToString(styles));
+}
 async function makeXlsx(data) {
   const response = await fetch("./assets/template.xlsx"); if (!response.ok) throw new Error("Excel 模板加载失败");
   const zip = await JSZip.loadAsync(await response.arrayBuffer());
@@ -264,6 +293,7 @@ async function makeXlsx(data) {
     setCell(doc, `G${row}`, amount === null ? "" : amount, amount === null ? "blank" : "number", true);
   }
   setCell(doc, "H17", totalOf(data), "number", true);
+  if (data.paperTone === "blue") await colorXlsxPaper(zip, doc);
   zip.file("xl/worksheets/sheet1.xml", new XMLSerializer().serializeToString(doc));
   return zip.generateAsync({ type: "blob", compression: "DEFLATE", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
 }
@@ -333,6 +363,7 @@ Promise.all([qr.alipay.decode(), qr.wechat.decode()]).then(() => {
       company: { type: "string" }, companyAddress: { type: "string" }, landline: { type: "string" }, mobile: { type: "string" }, qq: { type: "string" },
       formTitle: { type: "string" }, recipient: { type: "string" }, shippingAddress: { type: "string" }, contact: { type: "string" }, phone: { type: "string" },
       date: { type: "string" }, number: { type: "string" }, terms: { type: "string" }, issuedBy: { type: "string" }, receivedBy: { type: "string" }, slogan: { type: "string" },
+      paperTone: { type: "string", enum: ["white", "blue"] },
       items: { type: "array", minItems: 1, maxItems: 6, items: { type: "object", properties: Object.fromEntries(itemFields.map(key => [key, { type: "string" }])), required: ["model", "qty", "price"], additionalProperties: false } }
     }, required: ["formTitle", "recipient", "date", "number", "items"], additionalProperties: false };
     Promise.resolve(document.modelContext.registerTool({ name: "fill_save_delivery_slip", title: "填写并保存销售送货单", description: "将指定信息填入当前销售送货单并保存，显示最终预览和下载按钮。", inputSchema: schema, annotations: { readOnlyHint: false, untrustedContentHint: false }, execute(input) {
