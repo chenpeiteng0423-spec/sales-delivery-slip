@@ -17,6 +17,27 @@ const paperColors = {
   red: { body: "#fff0f1", edge: "#fae6e9", ring: "#e9ced3", xlsx: "FFFFF0F1" },
   yellow: { body: "#fff7df", edge: "#f8edcc", ring: "#e7dcc0", xlsx: "FFFFF7DF" },
 };
+const usageEndpoint = "https://sales-slip-usage.junext-home-preview.workers.dev/events";
+const namedStaff = new URLSearchParams(location.search).get("staff")?.trim().slice(0, 32) || "";
+let visitorId = crypto.randomUUID();
+try {
+  visitorId = localStorage.getItem("delivery-slip-visitor-v1") || visitorId;
+  localStorage.setItem("delivery-slip-visitor-v1", visitorId);
+} catch {}
+let draftTimer = 0;
+let revision = Date.now();
+function recordUse(kind, data = null, format = "") {
+  if (!usageEndpoint.startsWith("https://")) return Promise.resolve(false);
+  const staff = namedStaff || form.elements.namedItem("issuedBy")?.value.trim().slice(0, 32) || "";
+  return fetch(usageEndpoint, {
+    method: "POST", headers: { "Content-Type": "application/json" }, keepalive: true,
+    body: JSON.stringify({ kind, visitorId, staff, format, data, revision: revision = Math.max(revision + 1, Date.now()) }),
+  }).then(response => response.ok).catch(() => false);
+}
+function queueDraft() {
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(() => recordUse("draft", collect()), 1800);
+}
 qr.alipay.src = "./assets/alipay.png";
 qr.wechat.src = "./assets/wechat.png";
 let savedData = null;
@@ -72,7 +93,7 @@ function addItem(item = blankItem()) {
   const head = document.createElement("div"); head.className = "item-row__head";
   const title = document.createElement("strong"); title.textContent = `明细 ${editor.children.length + 1}`;
   const remove = document.createElement("button"); remove.type = "button"; remove.className = "remove-item"; remove.textContent = "移除此行";
-  remove.addEventListener("click", () => { if (editor.children.length === 1) return; row.remove(); renumber(); markDirty(); renderPreview(); });
+  remove.addEventListener("click", () => { if (editor.children.length === 1) return; row.remove(); renumber(); markDirty(); renderPreview(); queueDraft(); });
   head.append(title, remove);
   const grid = document.createElement("div"); grid.className = "item-grid";
   const defs = [
@@ -332,19 +353,23 @@ async function makeDocx(data) {
   return zip.generateAsync({ type: "blob", compression: "DEFLATE", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
 }
 
-form.addEventListener("input", () => { markDirty(); updateAmounts(); renderPreview(); });
+recordUse("view");
+form.addEventListener("input", () => { markDirty(); updateAmounts(); renderPreview(); queueDraft(); });
 form.addEventListener("submit", event => {
   event.preventDefault(); const data = collect(); if (!validate(data)) return;
+  clearTimeout(draftTimer);
   savedData = structuredClone(data);
   try { localStorage.setItem("delivery-slip-draft-v2", JSON.stringify(data)); statusEl.textContent = "已保存到当前浏览器"; }
   catch { statusEl.textContent = "已准备好下载；当前浏览器未保存草稿"; }
   drawReceipt(savedPreview, savedData);
   document.getElementById("savedTitle").textContent = data.formTitle;
   workspace.hidden = true; savedView.hidden = false; savedStatus.textContent = "";
+  recordUse("save", data);
   window.scrollTo({ top: 0, behavior: "instant" });
 });
-addButton.addEventListener("click", () => { addItem(); markDirty(); renderPreview(); });
+addButton.addEventListener("click", () => { addItem(); markDirty(); renderPreview(); queueDraft(); });
 document.getElementById("newReceipt").addEventListener("click", () => {
+  clearTimeout(draftTimer); recordUse("reset");
   applyData({ formTitle: "销售送货单", date: today(), items: [blankItem()] }); markDirty(); statusEl.textContent = "已新建空白单";
 });
 document.getElementById("backToEdit").addEventListener("click", () => {
@@ -358,12 +383,14 @@ downloadBar.addEventListener("click", async event => {
     const format = button.dataset.format;
     const blob = format === "pdf" ? await makePdf(savedData) : format === "docx" ? await makeDocx(savedData) : await makeXlsx(savedData);
     download(blob, filename(savedData, format)); savedStatus.textContent = `${format.toUpperCase()} 已开始下载`;
+    recordUse("download", savedData, format);
   } catch (error) { savedStatus.textContent = `生成失败：${error.message || "请重试"}`; }
   finally { button.disabled = false; }
 });
 Promise.all([qr.alipay.decode(), qr.wechat.decode()]).then(() => {
   let draft = null; try { draft = JSON.parse(localStorage.getItem("delivery-slip-draft-v2") || "null"); } catch {}
   applyData(draft && Array.isArray(draft.items) ? draft : { formTitle: "销售送货单", date: today(), terms: "收货请当面核对型号和数量，芯片保上机90天，感谢您的支持与配合！", items: [blankItem()] });
+  if (draft && Array.isArray(draft.items)) recordUse("draft", collect());
   statusEl.textContent = draft ? "已恢复本机草稿，保存后可下载" : "尚未保存";
   if (document.modelContext?.registerTool) {
     const schema = { type: "object", properties: {
