@@ -11,6 +11,16 @@ const addButton = document.getElementById("addItem");
 const fields = ["company", "companyAddress", "landline", "mobile", "qq", "formTitle", "recipient", "shippingAddress", "contact", "phone", "date", "number", "terms", "issuedBy", "receivedBy", "slogan"];
 const itemFields = ["model", "brand", "unit", "qty", "price", "batch", "remark"];
 const qr = { alipay: new Image(), wechat: new Image() };
+const logoInput = document.getElementById("logoFile");
+const logoThumb = document.getElementById("logoThumb");
+const logoPlaceholder = document.getElementById("logoPlaceholder");
+const removeLogo = document.getElementById("removeLogo");
+const logoImage = new Image();
+let logoData = "", logoBusy = false;
+logoImage.onload = () => {
+  renderPreview();
+  if (savedData?.logoData === logoData) drawReceipt(savedPreview, savedData);
+};
 const paperColors = {
   white: { body: "#fcfcf7", edge: "#f4f6f2", ring: "#d5dfe2" },
   blue: { body: "#eaf4fa", edge: "#e1eef6", ring: "#c7dce9", xlsx: "FFEAF4FA" },
@@ -31,7 +41,7 @@ function recordUse(kind, data = null, format = "") {
   const staff = namedStaff || form.elements.namedItem("issuedBy")?.value.trim().slice(0, 32) || "";
   return fetch(usageEndpoint, {
     method: "POST", headers: { "Content-Type": "application/json" }, keepalive: true,
-    body: JSON.stringify({ kind, visitorId, staff, format, data, revision: revision = Math.max(revision + 1, Date.now()) }),
+    body: JSON.stringify({ kind, visitorId, staff, format, data: data ? { ...data, logoData: undefined } : null, revision: revision = Math.max(revision + 1, Date.now()) }),
   }).then(response => response.ok).catch(() => false);
 }
 function queueDraft() {
@@ -49,6 +59,19 @@ function today() {
 }
 function blankItem() { return { model: "", brand: "", unit: "PCS", qty: "", price: "", batch: "", remark: "" }; }
 function clean(value) { return String(value ?? "").trim(); }
+function setLogoData(value) {
+  logoData = typeof value === "string" && value.length < 1500000 && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(value) ? value : "";
+  if (logoData) { logoImage.src = logoData; logoThumb.src = logoData; }
+  else { logoImage.removeAttribute("src"); logoThumb.removeAttribute("src"); logoInput.value = ""; }
+  logoThumb.hidden = !logoData;
+  logoPlaceholder.hidden = !!logoData;
+  removeLogo.hidden = !logoData;
+}
+async function ensureLogoReady(data) {
+  if (!data.logoData) return;
+  if (logoImage.src !== data.logoData) logoImage.src = data.logoData;
+  await logoImage.decode();
+}
 function money(value) { return `¥${Number(value || 0).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
 function lineAmount(item) {
   const qty = Number(item.qty), price = Number(item.price);
@@ -119,6 +142,7 @@ function collect() {
   const data = {};
   for (const key of fields) data[key] = clean(form.elements.namedItem(key).value);
   data.paperTone = form.elements.namedItem("paperTone").value;
+  data.logoData = logoData;
   data.items = [...editor.children].map(row => Object.fromEntries(itemFields.map(key => [key, clean(row.querySelector(`[data-item="${key}"]`).value)])));
   return data;
 }
@@ -155,6 +179,7 @@ function validate(data) {
 function applyData(data) {
   for (const key of fields) form.elements.namedItem(key).value = data[key] || (key === "formTitle" ? "销售送货单" : "");
   form.elements.namedItem("paperTone").value = Object.hasOwn(paperColors, data.paperTone) ? data.paperTone : "white";
+  setLogoData(data.logoData || "");
   editor.replaceChildren();
   for (const item of data.items?.length ? data.items.slice(0, 6) : [blankItem()]) addItem(item);
   updateAmounts(); renderPreview();
@@ -192,12 +217,13 @@ function drawReceipt(canvas, data) {
     ctx.fillStyle = paper.ring; ctx.beginPath(); ctx.arc(x, y, 16, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = "#36515d"; ctx.beginPath(); ctx.arc(x, y, 12, 0, Math.PI * 2); ctx.fill();
   }
-  // Header and the two exact payment codes supplied by the owner.
-  text(data.company, 200, 134, 36, true, "left", 820);
-  field("地址：", data.companyAddress, 200, 190, 280, 760);
-  field("电话：", data.landline, 200, 231, 278, 270);
-  field("手机：", data.mobile, 550, 231, 625, 240);
-  field("QQ：", data.qq, 875, 231, 934, 185);
+  // Leave the left header position blank until a company logo is uploaded.
+  if (data.logoData && logoImage.complete && logoImage.naturalWidth) ctx.drawImage(logoImage, 158, 98, 128, 128);
+  text(data.company, 305, 134, 36, true, "left", 785);
+  field("地址：", data.companyAddress, 305, 190, 385, 700);
+  field("电话：", data.landline, 305, 231, 383, 230);
+  field("手机：", data.mobile, 625, 231, 700, 180);
+  field("QQ：", data.qq, 898, 231, 957, 150);
   ctx.drawImage(qr.alipay, 1125, 96, 154, 154);
   ctx.drawImage(qr.wechat, 1380, 96, 154, 154);
   ["支", "付", "宝"].forEach((v, i) => text(v, 1308, 126 + i * 39, 22));
@@ -244,6 +270,31 @@ function renderPreview() {
   const data = collect(); drawReceipt(preview, data);
 }
 
+async function handleLogoUpload() {
+  const file = logoInput.files?.[0];
+  if (!file) return;
+  if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) || file.size > 4 * 1024 * 1024) {
+    logoInput.value = ""; statusEl.textContent = "请选择不超过 4 MB 的 PNG、JPG 或 WebP 图片"; return;
+  }
+  logoBusy = true; logoInput.disabled = true; statusEl.textContent = "正在处理 Logo…";
+  const url = URL.createObjectURL(file);
+  try {
+    const source = new Image(); source.src = url; await source.decode();
+    if (!source.naturalWidth || source.naturalWidth * source.naturalHeight > 40000000) throw new Error("图片尺寸过大");
+    const canvas = document.createElement("canvas"); canvas.width = canvas.height = 320;
+    const context = canvas.getContext("2d");
+    const ratio = Math.min(320 / source.naturalWidth, 320 / source.naturalHeight);
+    const width = source.naturalWidth * ratio, height = source.naturalHeight * ratio;
+    context.drawImage(source, (320 - width) / 2, (320 - height) / 2, width, height);
+    setLogoData(canvas.toDataURL("image/png"));
+    if (!logoData) throw new Error("Logo 转换失败");
+    await logoImage.decode();
+    markDirty(); renderPreview(); queueDraft();
+    statusEl.textContent = "Logo 已加入，保存后会显示在单据左上角";
+  } catch (error) { logoInput.value = ""; statusEl.textContent = `Logo 上传失败：${error.message || "请换一张图片"}`; }
+  finally { URL.revokeObjectURL(url); logoBusy = false; logoInput.disabled = false; }
+}
+
 function download(blob, filename) {
   const url = URL.createObjectURL(blob), link = document.createElement("a");
   link.href = url; link.download = filename; document.body.append(link); link.click(); link.remove();
@@ -251,13 +302,16 @@ function download(blob, filename) {
 }
 function filename(data, extension) { return `${data.formTitle.replace(/[^\w\u4e00-\u9fff-]/g, "_")}_${data.number.replace(/[^\w\u4e00-\u9fff-]/g, "_")}_${data.date}.${extension}`; }
 async function makePdf(data) {
+  await ensureLogoReady(data);
   const canvas = document.createElement("canvas"); canvas.width = 3520; canvas.height = 2000; drawReceipt(canvas, data);
   const png = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
   if (!png) throw new Error("PDF 页面生成失败");
   const pdf = await PDFLib.PDFDocument.create();
-  const page = pdf.addPage([1008, 572.73]);
+  const pageWidth = 241 * 72 / 25.4, pageHeight = 140 * 72 / 25.4;
+  const imageWidth = 230 * 72 / 25.4, imageHeight = imageWidth * 1000 / 1760;
+  const page = pdf.addPage([pageWidth, pageHeight]);
   const image = await pdf.embedPng(await png.arrayBuffer());
-  page.drawImage(image, { x: 0, y: 0, width: 1008, height: 572.73 });
+  page.drawImage(image, { x: (pageWidth - imageWidth) / 2, y: (pageHeight - imageHeight) / 2, width: imageWidth, height: imageHeight });
   return new Blob([await pdf.save()], { type: "application/pdf" });
 }
 
@@ -275,6 +329,17 @@ function setCell(doc, address, value, type = "text", formula = false) {
     const is = doc.createElementNS(XML_NS, "x:is"), t = doc.createElementNS(XML_NS, "x:t");
     t.textContent = clean(value); is.append(t); cell.append(is);
   }
+}
+async function addXlsxLogo(zip, data) {
+  if (!data.logoData) return;
+  const drawingPath = "xl/drawings/drawing1.xml", relsPath = "xl/drawings/_rels/drawing1.xml.rels";
+  const drawing = await zip.file(drawingPath).async("string"), rels = await zip.file(relsPath).async("string");
+  if (!drawing.includes("</wsDr>") || !rels.includes("</Relationships>")) throw new Error("Excel Logo 位置无法读取");
+  const anchor = `<oneCellAnchor><from><col>1</col><colOff>150000</colOff><row>1</row><rowOff>0</rowOff></from><ext cx="850000" cy="850000"/><pic><nvPicPr><cNvPr id="3" name="公司 Logo"/><cNvPicPr><a:picLocks xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" noChangeAspect="1"/></cNvPicPr></nvPicPr><blipFill><a:blip xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="rId3"/><a:stretch xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:fillRect/></a:stretch></blipFill><spPr><a:prstGeom xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" prst="rect"/></spPr></pic><clientData/></oneCellAnchor>`;
+  const relation = `<Relationship Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="/xl/media/company-logo.png" Id="rId3"/>`;
+  zip.file(drawingPath, drawing.replace("</wsDr>", `${anchor}</wsDr>`));
+  zip.file(relsPath, rels.replace("</Relationships>", `${relation}</Relationships>`));
+  zip.file("xl/media/company-logo.png", data.logoData.slice("data:image/png;base64,".length), { base64: true });
 }
 async function colorXlsxPaper(zip, sheet, rgb) {
   const styles = new DOMParser().parseFromString(await zip.file("xl/styles.xml").async("string"), "application/xml");
@@ -308,7 +373,7 @@ async function makeXlsx(data) {
   const xml = await zip.file("xl/worksheets/sheet1.xml").async("string");
   const doc = new DOMParser().parseFromString(xml, "application/xml");
   if (doc.querySelector("parsererror")) throw new Error("Excel 模板无法读取");
-  const mapping = { C2: data.company, C3: data.companyAddress, C4: data.landline, F4: data.mobile, C5: data.qq, B7: data.formTitle, C8: data.recipient, C9: data.shippingAddress, F8: data.contact, F9: data.phone, H9: data.number, E17: upperAmount(totalOf(data)), C18: data.terms, C21: data.issuedBy, G21: data.receivedBy, B23: data.slogan };
+  const mapping = { C2: data.company, C3: `地址：${data.companyAddress}`, C4: `电话：${data.landline}`, F4: data.mobile, C5: `QQ：${data.qq}`, B7: data.formTitle, C8: data.recipient, C9: data.shippingAddress, F8: data.contact, F9: data.phone, H9: data.number, E17: upperAmount(totalOf(data)), C18: data.terms, C21: data.issuedBy, G21: data.receivedBy, B23: data.slogan };
   for (const [cell, value] of Object.entries(mapping)) setCell(doc, cell, value);
   const [year, month, day] = data.date.split("-").map(Number);
   setCell(doc, "H8", Math.round((Date.UTC(year, month - 1, day) - Date.UTC(1899, 11, 30)) / 86400000), "number");
@@ -322,6 +387,7 @@ async function makeXlsx(data) {
   setCell(doc, "H17", totalOf(data), "number", true);
   const paperFill = paperColors[data.paperTone]?.xlsx;
   if (paperFill) await colorXlsxPaper(zip, doc, paperFill);
+  await addXlsxLogo(zip, data);
   zip.file("xl/worksheets/sheet1.xml", new XMLSerializer().serializeToString(doc));
   return zip.generateAsync({ type: "blob", compression: "DEFLATE", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
 }
@@ -338,13 +404,14 @@ function wordImage(id, rid, name) {
   return `<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="820000" cy="820000"/><wp:docPr id="${id}" name="${name}"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="${id}" name="${name}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${rid}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="820000" cy="820000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`;
 }
 async function makeDocx(data) {
+  await ensureLogoReady(data);
   const zip = new JSZip();
   const canvas = document.createElement("canvas"); canvas.width = 3520; canvas.height = 2000; drawReceipt(canvas, data);
   const png = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
   if (!png) throw new Error("Word 页面生成失败");
-  const width = 17399000, height = 9885795;
+  const width = 230 * 36000, height = Math.round(width * 1000 / 1760);
   const picture = `<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="0" w:after="0"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${width}" cy="${height}"/><wp:docPr id="1" name="销售送货单" descr="包含已填写内容和收款二维码的销售送货单"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="1" name="销售送货单"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${width}" cy="${height}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`;
-  const doc = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>${picture}<w:sectPr><w:pgSz w:w="20160" w:h="11520" w:orient="landscape"/><w:pgMar w:top="144" w:right="144" w:bottom="144" w:left="144" w:header="0" w:footer="0"/></w:sectPr></w:body></w:document>`;
+  const doc = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>${picture}<w:sectPr><w:pgSz w:w="13663" w:h="7937" w:orient="landscape"/><w:pgMar w:top="170" w:right="170" w:bottom="170" w:left="170" w:header="0" w:footer="0"/></w:sectPr></w:body></w:document>`;
   zip.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`);
   zip.file("_rels/.rels", `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`);
   zip.file("word/document.xml", doc);
@@ -354,9 +421,12 @@ async function makeDocx(data) {
 }
 
 recordUse("view");
+logoInput.addEventListener("change", handleLogoUpload);
+removeLogo.addEventListener("click", () => { setLogoData(""); markDirty(); renderPreview(); queueDraft(); });
 form.addEventListener("input", () => { markDirty(); updateAmounts(); renderPreview(); queueDraft(); });
 form.addEventListener("submit", event => {
-  event.preventDefault(); const data = collect(); if (!validate(data)) return;
+  event.preventDefault(); if (logoBusy) { statusEl.textContent = "Logo 正在处理，请稍候再保存"; return; }
+  const data = collect(); if (!validate(data)) return;
   clearTimeout(draftTimer);
   savedData = structuredClone(data);
   try { localStorage.setItem("delivery-slip-draft-v2", JSON.stringify(data)); statusEl.textContent = "已保存到当前浏览器"; }
@@ -386,6 +456,11 @@ downloadBar.addEventListener("click", async event => {
     recordUse("download", savedData, format);
   } catch (error) { savedStatus.textContent = `生成失败：${error.message || "请重试"}`; }
   finally { button.disabled = false; }
+});
+document.getElementById("printReceipt").addEventListener("click", async () => {
+  if (!savedData) return;
+  try { await ensureLogoReady(savedData); drawReceipt(savedPreview, savedData); window.print(); }
+  catch { savedStatus.textContent = "Logo 加载失败，请重新上传后打印"; }
 });
 Promise.all([qr.alipay.decode(), qr.wechat.decode()]).then(() => {
   let draft = null; try { draft = JSON.parse(localStorage.getItem("delivery-slip-draft-v2") || "null"); } catch {}

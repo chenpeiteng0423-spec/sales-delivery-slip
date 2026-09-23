@@ -7,10 +7,10 @@
   <meta name="description" content="销售送货单填写和文件下载工具">
   <title>销售送货单制作</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="./style.css?v=20260920d">
+  <link rel="stylesheet" href="./style.css?v=20260922-actions">
   <script defer src="./vendor/jszip.min.js"></script>
   <script defer src="./vendor/pdf-lib.min.js"></script>
-  <script defer src="./app.js?v=20260920c"></script>
+  <script defer src="./app.js?v=20260922-logo"></script>
 </head>
 <body>
   <header class="site-header">
@@ -30,6 +30,10 @@
       <form id="receiptForm" novalidate>
         <section class="form-section" aria-labelledby="companyTitle">
           <div class="section-heading"><span>01</span><h3 id="companyTitle">公司抬头</h3></div>
+          <div class="logo-setting">
+            <div class="logo-setting__preview" aria-hidden="true"><img id="logoThumb" alt="" hidden><span id="logoPlaceholder">LOGO</span></div>
+            <div class="logo-setting__controls"><label for="logoFile">公司 Logo（选填）</label><input id="logoFile" type="file" accept="image/png,image/jpeg,image/webp" aria-describedby="logoHelp"><p id="logoHelp">上传 PNG、JPG 或 WebP 图片，建议使用清晰的方形 Logo。</p><button id="removeLogo" type="button" class="text-button" hidden>移除 Logo</button></div>
+          </div>
           <div class="field-grid two company-grid">
             <label class="field wide">公司名称<input name="company" maxlength="36" autocomplete="organization"></label>
             <label class="field wide">公司地址<input name="companyAddress" maxlength="60" autocomplete="street-address"></label>
@@ -84,27 +88,29 @@
           </div>
         </section>
 
-        <div class="save-area">
-          <button class="primary-button" type="submit">保存并查看</button>
-          <button class="quiet-button" id="newReceipt" type="button">新建空白单</button>
-          <p id="status" role="status" aria-live="polite">尚未保存</p>
-        </div>
       </form>
 
     </section>
 
-    <aside class="preview-panel" aria-labelledby="previewTitle">
-      <div class="preview-heading"><div><p class="eyebrow">实时预览</p><h2 id="previewTitle">销售送货单</h2></div><span>连续纸样式</span></div>
-      <div class="paper-scroller"><canvas id="receiptPreview" width="1760" height="1000" role="img" aria-label="当前销售送货单预览，包含两侧小孔和右上角两个收款二维码"></canvas></div>
-      <p class="preview-caption">收款码来自您提供的图片。付款前请核对收款人信息。</p>
-    </aside>
+    <div class="preview-side">
+      <div class="save-area">
+        <button class="primary-button" type="submit" form="receiptForm">保存并查看</button>
+        <button class="quiet-button" id="newReceipt" type="button">新建空白单</button>
+        <p id="status" role="status" aria-live="polite">尚未保存</p>
+      </div>
+      <aside class="preview-panel" aria-labelledby="previewTitle">
+        <div class="preview-heading"><div><p class="eyebrow">实时预览</p><h2 id="previewTitle">销售送货单</h2></div><span>连续纸样式</span></div>
+        <div class="paper-scroller"><canvas id="receiptPreview" width="1760" height="1000" role="img" aria-label="当前销售送货单预览，包含两侧小孔和右上角两个收款二维码"></canvas></div>
+        <p class="preview-caption">收款码来自您提供的图片。付款前请核对收款人信息。</p>
+      </aside>
+    </div>
   </main>
   <section id="savedView" class="saved-view" aria-labelledby="savedTitle" hidden>
-    <div class="saved-top"><div><p class="eyebrow">已保存</p><h2 id="savedTitle">销售送货单</h2><p>请核对下方单据，然后选择格式下载。</p></div><button id="backToEdit" type="button" class="quiet-button">返回修改</button></div>
+    <div class="saved-top"><div><p class="eyebrow">已保存</p><h2 id="savedTitle">销售送货单</h2><p>请核对下方单据，然后打印或选择格式下载。</p></div><button id="backToEdit" type="button" class="quiet-button">返回修改</button></div>
     <div class="saved-paper"><canvas id="savedPreview" width="1760" height="1000" role="img" aria-label="已保存的销售送货单"></canvas></div>
     <section id="downloadBar" class="download-bar" aria-labelledby="downloadTitle">
       <div><p class="eyebrow">文件已就绪</p><h3 id="downloadTitle">下载到电脑</h3></div>
-      <div class="download-actions"><button type="button" data-format="pdf">下载 PDF</button><button type="button" data-format="docx">下载 Word</button><button type="button" data-format="xlsx">下载 Excel</button></div>
+      <div class="download-actions"><button type="button" id="printReceipt">打印连续纸</button><button type="button" data-format="pdf">下载 PDF</button><button type="button" data-format="docx">下载 Word</button><button type="button" data-format="xlsx">下载 Excel</button></div>
     </section>
     <p id="savedStatus" role="status" aria-live="polite"></p>
   </section>

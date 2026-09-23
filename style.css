@@ -16,3 +16,29 @@
 .paper-choice__options{flex-wrap:wrap}.paper-swatch--red{background:#fff0f1}
 .paper-choice__options{gap:4px}.paper-choice__options label{gap:4px;padding-inline:6px}.paper-swatch--yellow{background:#fff7df}
 @media(max-width:650px){.paper-choice__options label{gap:3px;padding-inline:4px}.paper-choice__options input,.paper-swatch{width:12px;height:12px}}
+
+@page{size:241mm 140mm;margin:0}
+@media print{
+  html,body{width:241mm;height:140mm;margin:0!important;padding:0!important;overflow:hidden!important;background:#fff!important;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+  .site-header,.workspace,.saved-top,.download-bar,#savedStatus{display:none!important}
+  .saved-view{display:flex!important;align-items:center;justify-content:center;width:241mm;height:140mm;max-width:none;margin:0!important;padding:0!important;overflow:hidden!important}
+  .saved-view[hidden]{display:none!important}
+  .saved-paper{width:230mm;height:auto;margin:0!important;padding:0!important;overflow:visible!important;border:0!important;border-radius:0!important;background:none!important}
+  .saved-paper canvas{display:block;width:230mm!important;height:auto!important;min-width:0!important;max-width:none!important;box-shadow:none!important}
+}
+
+.logo-setting{display:flex;align-items:center;gap:12px;margin:-1px 0 12px;padding:10px;border:1px solid #dce5ec;border-radius:9px;background:#f8fbfd}
+.logo-setting__preview{width:72px;height:72px;flex:none;display:grid;place-items:center;overflow:hidden;border:1px dashed #a8bdcc;border-radius:8px;background:#fff;color:#8ca5b6;font-size:11px;letter-spacing:.12em}
+.logo-setting__preview img{display:block;max-width:100%;max-height:100%;object-fit:contain}
+.logo-setting__preview img[hidden]{display:none}
+.logo-setting__controls{min-width:0;flex:1}.logo-setting__controls label{display:block;margin-bottom:4px;color:#3d5365;font-size:12px;font-weight:700}
+.logo-setting__controls input[type=file]{min-height:0;margin:0;padding:6px;border-radius:7px;font-size:11px;line-height:1.3;background:#fff}
+.logo-setting__controls input[type=file]::file-selector-button{margin-right:7px;padding:5px 8px;border:1px solid #b9cedd;border-radius:5px;background:#e9f3f9;color:#245f89;font:inherit;font-weight:700;cursor:pointer}
+.logo-setting__controls p{margin:4px 0 0;color:#738899;font-size:11px;line-height:1.3}
+.logo-setting__controls #removeLogo{min-height:0;margin-top:5px;padding:4px 8px;font-size:11px}
+@media(max-width:410px){.logo-setting{gap:8px;padding:8px}.logo-setting__preview{width:60px;height:60px}.logo-setting__controls p{font-size:10px}}
+
+.preview-side{min-width:0;position:sticky;top:16px}
+.preview-side .save-area{margin-bottom:12px}
+.preview-side .preview-panel{position:static;top:auto}
+@media(max-width:1100px){.preview-side{position:static}}
